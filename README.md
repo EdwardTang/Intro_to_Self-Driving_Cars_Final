@@ -1,0 +1,2 @@
+# Intro_to_Self-Driving_Cars_Final
+This is the final project of Coursera course Introduction to Self-Driving Cars. In this project, I wrote and implemented a controller for the CARLA simulator. The goal is to control the vehicle to follow a race track by navigating through preset waypoints. The vehicle needs to reach these waypoints at certain desired speeds, so both longitudinal and lateral control will be required.
