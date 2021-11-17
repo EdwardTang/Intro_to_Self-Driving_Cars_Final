@@ -276,15 +276,52 @@ class Controller2D(object):
             
             # Change the steer output with the lateral controller. 
             L = 1.5
-            kp_lat = 1.5
-            ki_lat = 0.2
-            kd_lat = 0.5
+            # kp_lat = 1.5
+            # ki_lat = 0.2
+            # kd_lat = 0.5
 
-            # look_ahead_index = len(waypoints) // 2
-            # look_ahead = waypoints[look_ahead_index]
-            # heading_error 
+            p_critical_lat = 0.5 #0.5
+            kp_lat = 0.6 * p_critical_lat 
+            ki_lat = 0.5 * p_critical_lat
+            kd_lat = 0.125 * p_critical_lat
 
-            steer_output  = 0
+            # use the middle point in the given waypoints as the look ahead target
+            look_ahead_index = len(waypoints)//2
+            look_ahead = waypoints[look_ahead_index]
+
+            # heading_error = yaw - np.arctan2(waypoints[look_ahead_index][1] - waypoints[look_ahead_index-1][1], waypoints[look_ahead_index][0] - waypoints[look_ahead_index-1][0])
+            heading_error = yaw - np.arctan2(waypoints[1][1] - waypoints[0][1], waypoints[1][0] - waypoints[0][0])
+            while heading_error > np.pi: heading_error -= np.pi*2
+            while heading_error < -np.pi: heading_error += np.pi*2
+            #print("heading_error: ", heading_error/3.1415926*180)
+
+            heading_error_derivative = heading_error/dt
+            self.vars.heading_error_integral += heading_error * dt
+            feedback_lateral = kp_lat * heading_error + ki_lat * self.vars.heading_error_integral + kd_lat * heading_error_derivative
+
+
+            ld = np.sqrt((look_ahead[0] - x)**2 + (look_ahead[1] - y)**2)
+
+            vector_look_ahead = [look_ahead[0] - x,look_ahead[1] - y]
+            vector_car = [np.cos(yaw),np.sin(yaw)]
+            corss_track_error = np.cross(vector_look_ahead, vector_car)
+
+            curvature = 2/ld/ld*corss_track_error
+            
+            # Change the steer output with the lateral controller. 
+            steer_output = np.arctan(curvature*L) + feedback_lateral
+            steer_output = -steer_output
+            steer_output = min(steer_output,1.22)
+            steer_output = max(steer_output,-1.22)
+
+            # y_des = waypoints[-1][1]
+            # x_des = waypoints[-1][1]
+            # y_start = waypoints[0][1]
+            # x_start = waypoints[0][0]
+            
+            # # For 
+
+            # steer_output  = 0
 
             ######################################################
             # SET CONTROLS OUTPUT
