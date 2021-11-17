@@ -114,6 +114,20 @@ class Controller2D(object):
             throttle_output = 0.5 * self.vars.v_previous
         """
         self.vars.create_var('v_previous', 0.0)
+        self.vars.create_var('t_previous', 0.0)
+        self.vars.create_var('v_error_integral', 0.0)
+        self.vars.create_var('heading_error_integral', 0.0)
+
+        # intergal error
+        self.vars.create_var('lon_error_pre', 0.0)
+        self.vars.create_var('lon_error_pre_integral', 0.0)
+
+        # Throttle param
+        self.vars.create_var('throttle_des', 0.0)
+        self.vars.create_var('throttle_previous', 0.0)
+
+        self.vars.create_var('lat_constant_K', 0.4)
+        self.vars.create_var('steer_des', 0.0)
 
         # Skip the first frame to store previous values properly
         if self._start_control_loop:
@@ -159,11 +173,94 @@ class Controller2D(object):
                 access the persistent variables declared above here. For
                 example, can treat self.vars.v_previous like a "global variable".
             """
+
+            # Assume this no braking, so brake_output is always 0
+            # Use PID + feedforward method for longtitudinal controller
+            # The dynamic model is not used here
+            # kp = 0.2 
+            # ki = 0.05
+            # kd = 0.01
+
+            # v_error = v_desired - v
+
+            # dt = t - self.vars.t_previous
+            # v_error_derivative = v_error / dt
+
+            # self.vars.v_error_integral += v_error * dt
+
+            # feedback = kp * v_error + self.vars.v_error_integral + kd * v_error_derivative
+
+            # # calculate the feedforward throttle,
+            # print('Waypoint length: ' + str(len(waypoints)))
+            # look_ahead = waypoints[len(waypoints) - 1]
+            # v_desired_forward = look_ahead[2]
+            # print('look_ahead: ' + '[' + str(look_ahead[0]) + ', ' + str(look_ahead[1])+ ', ' + str(look_ahead[2]))
+            # if v_desired_forward <= 6:
+            #     feedforward = 0.15 + v_desired_forward / 6 * (0.6 -0.15)
+            # elif v_desired <= 11.5:
+            #     feedforward = 0.6 + (v_desired_forward - 6) / (11.5 - 6) * (0.8 - 0.6)
+            # else:
+            #     feedforward = 0.8 + (v_desired_forward - 11.5) / 85
             
-            # Change these outputs with the longitudinal controller. Note that
-            # brake_output is optional and is not required to pass the
-            # assignment, as the car will naturally slow down over time.
-            throttle_output = 0
+            # # Change these outputs with the longitudinal controller. Note that
+            # # brake_output is optional and is not required to pass the
+            # # assignment, as the car will naturally slow down over time.
+            # throttle_output = feedforward + feedback
+            # # throttle_output = feedback
+            # throttle_output = min(throttle_output, 1)
+            # throttle_output = max(throttle_output, 0)
+            # print('feedforwad: ' + str(feedforward) + ', ' + 'feedback: ' + str(feedback) + 'throttle_output: ' + str(throttle_output))
+
+            # kp = 1
+            # ki = float('inf') # 0.5
+            # kd = 0 # 0.5
+            # With PID Tuning using the Ziegler Nichols 
+
+            p_critical = 0.5 #0.5
+            kp = 0.6 * p_critical 
+            ki = 0.5 * p_critical
+            kd = 0.125 * p_critical
+
+            t_cur = t
+            t_pre = self.vars.t_previous
+
+            dt = t_cur - t_pre
+
+            # P
+            v_error_cur = v_desired - v
+
+            # I
+            v_error_pre = self.vars.lon_error_pre
+            v_error_pre_integral = self.vars.lon_error_pre_integral
+            v_error_integral = v_error_pre_integral + v_error_pre * dt
+
+            # D
+            v_error_dervative = (v_error_cur - v_error_pre) / dt
+            a_des = kp * v_error_cur + ki *  v_error_integral + kd * v_error_dervative
+
+            # feedforward
+            look_ahead = waypoints[len(waypoints) - 1]
+            v_desired_forward = look_ahead[2]
+            print('look_ahead: ' + '[' + str(look_ahead[0]) + ', ' + str(look_ahead[1])+ ', ' + str(look_ahead[2]))
+            if v_desired_forward <= 6:
+                feedforward = 0.15 + v_desired_forward / 6 * (0.6 -0.15)
+            elif v_desired <= 11.5:
+                feedforward = 0.6 + (v_desired_forward - 6) / (11.5 - 6) * (0.8 - 0.6)
+            else:
+                feedforward = 0.8 + (v_desired_forward - 11.5) / 85
+            
+            throttle_pre = self.vars.throttle_previous
+            if(a_des + feedforward > 0) :
+                throttle_des = a_des + feedforward
+                if(throttle_des - throttle_pre > 0.1):
+                    throttle_des = throttle_pre + 0.1
+            else: 
+                throttle_des = 0
+            print('throttle_des: ' + str(throttle_des) + '[a_des: ' + str(a_des) + ', feedforward: ' + str(feedforward)+ ', throttle_pre: ' + str(throttle_pre))
+            print('v: ' + str(v) + ', v_desired: ' + str(v_desired))
+            self.vars.throttle_des = throttle_des
+            throttle_output = self.vars.throttle_des
+
             brake_output    = 0
 
             ######################################################
@@ -178,7 +275,16 @@ class Controller2D(object):
             """
             
             # Change the steer output with the lateral controller. 
-            steer_output    = 0
+            L = 1.5
+            kp_lat = 1.5
+            ki_lat = 0.2
+            kd_lat = 0.5
+
+            # look_ahead_index = len(waypoints) // 2
+            # look_ahead = waypoints[look_ahead_index]
+            # heading_error 
+
+            steer_output  = 0
 
             ######################################################
             # SET CONTROLS OUTPUT
@@ -198,3 +304,7 @@ class Controller2D(object):
             in the next iteration)
         """
         self.vars.v_previous = v  # Store forward speed to be used in next step
+        self.vars.t_previous = t_cur
+        self.vars.lon_error_pre = v_error_cur
+        self.vars.lon_error_pre_integral = v_error_integral
+        self.vars.throttle_previous = self.vars.throttle_des
